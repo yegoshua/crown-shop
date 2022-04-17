@@ -1,11 +1,13 @@
 import "./App.css";
 import HomePage from "./page/homepage/homepage.component";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, Navigate } from "react-router-dom";
 import ShopPage from "./page/homepage/shoppage/shoppage.component";
 import Header from "./components/header/header.component";
 import SignInAndSignUpPage from "./page/sign-in-and-sign-up/sign-in-and-sign-up.component";
-import { auth } from "./firebase/firebase.util";
+import { auth, createUserProfileDocument } from "./firebase/firebase.util";
 import React from "react";
+import { connect } from "react-redux";
+import { setCurrentUser } from "./redux/user/user.actions";
 
 const HatsPage = () => (
    <div>
@@ -14,19 +16,22 @@ const HatsPage = () => (
 );
 
 class App extends React.Component {
-   constructor() {
-      super();
-      this.state = {
-         currentUser: null,
-      };
-   }
-
-   unsubscribeFromAuth = null;
    componentDidMount() {
-      this.unsubscribeFromAuth = auth.onAuthStateChanged((user) => {
-         this.setState({ currentUser: user });
+      const { setCurrentUser } = this.props;
 
-         console.log(user);
+      this.unsubscribeFromAuth = auth.onAuthStateChanged(async (userAuth) => {
+         if (userAuth) {
+            const userRef = await createUserProfileDocument(userAuth);
+
+            userRef.onSnapshot((snapShot) => {
+               setCurrentUser({
+                  id: snapShot.id,
+                  ...snapShot.data(),
+               });
+            });
+         }
+
+         setCurrentUser(userAuth);
       });
    }
 
@@ -37,15 +42,24 @@ class App extends React.Component {
    render() {
       return (
          <div className="App">
-            <Header currentUser={this.state.currentUser}></Header>
+            <Header />
             <Routes>
                <Route path="/" element={<HomePage />} />
                <Route path="/shop" element={<ShopPage />} />
                <Route path="/signin" element={<SignInAndSignUpPage />} />
+               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
          </div>
       );
    }
 }
 
-export default App;
+const mapStateToProps = ({ user }) => ({
+   currentUser: user.currentUser,
+});
+
+const mapDispatchToProps = (dispatch) => ({
+   setCurrentUser: (user) => dispatch(setCurrentUser(user)),
+});
+
+export default connect(mapStateToProps, mapDispatchToProps)(App);
